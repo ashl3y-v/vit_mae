@@ -19,10 +19,10 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 3e-3
+lr = 2e-2
 clip = 16
-epochs = 4096
-save_interval = 64
+epochs = 32768
+save_interval = 128
 batches = epochs
 t_batch_size = 62
 v_batch_size = 16
@@ -70,7 +70,7 @@ optim = T.optim.AdamW(params, lr=lr, fused=True)
 
 one_cycle = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
 reduce_plat = T.optim.lr_scheduler.ReduceLROnPlateau(
-    optim, factor=0.25, patience=32, threshold=1
+    optim, factor=0.25, patience=128, threshold=0.20
 )
 
 t_losses = T.tensor([])
@@ -97,7 +97,7 @@ for i, t_x in enumerate(t_loader):
     loss.backward()
     T.nn.utils.clip_grad_norm_(params, clip)
     optim.step()
-    lr_sch.step()
+    one_cycle.step()
 
     t_losses = T.cat(
         [t_losses, loss.detach().to(dtype=T.float32, device="cpu").reshape([1])]
@@ -116,6 +116,8 @@ for i, t_x in enumerate(t_loader):
     v_hat = vitmae.conv_t(v_hat)
 
     v_loss = vitmae.loss(v_x, v_hat)
+
+    reduce_plat.step(v_loss)
 
     v_losses = T.cat(
         [v_losses, v_loss.detach().to(dtype=T.float32, device="cpu").reshape([1])]
