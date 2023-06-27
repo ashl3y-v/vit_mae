@@ -63,6 +63,7 @@ class ViTMAE(nn.Module):
             dropout=dropout,
             activation=activation,
             dim_feedforward=d_feedforward,
+            batch_first=True,
             dtype=dtype,
             device=device,
         )
