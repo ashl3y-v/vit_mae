@@ -66,10 +66,7 @@ params = vitmae.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-one_cycle = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
-reduce_plat = T.optim.lr_scheduler.ReduceLROnPlateau(
-    optim, factor=0.25, patience=128, threshold=0.20
-)
+lr_sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
 
 t_losses = T.tensor([])
 v_losses = T.tensor([])
@@ -95,7 +92,7 @@ for i, t_x in enumerate(t_loader):
     loss.backward()
     T.nn.utils.clip_grad_norm_(params, clip)
     optim.step()
-    one_cycle.step()
+    lr_sch.step()
 
     t_losses = T.cat(
         [t_losses, loss.detach().to(dtype=T.float32, device="cpu").reshape([1])]
@@ -114,8 +111,6 @@ for i, t_x in enumerate(t_loader):
     v_hat = vitmae.conv_t(v_hat)
 
     v_loss = vitmae.loss(v_x, v_hat)
-
-    reduce_plat.step(v_loss)
 
     v_losses = T.cat(
         [v_losses, v_loss.detach().to(dtype=T.float32, device="cpu").reshape([1])]
