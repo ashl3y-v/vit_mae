@@ -19,7 +19,7 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 1e-2
+lr = 3e-3
 clip = 16
 epochs = 4096
 save_interval = 64
@@ -64,23 +64,21 @@ v_loader = T.utils.data.DataLoader(
 
 print("Dataset loaded")
 
-# print("Started transforms")
-# t_set, v_set = list(map(proc, t_set)), list(map(proc, v_set))
-# t_set, v_set = T.stack(t_set), T.stack(v_set)
-# print("Transforms completed", t_set.shape, v_set.shape)
-
 params = vitmae.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-lr_sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
+one_cycle = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
+reduce_plat = T.optim.lr_scheduler.ReduceLROnPlateau(
+    optim, factor=0.25, patience=32, threshold=1
+)
 
 t_losses = T.tensor([])
 v_losses = T.tensor([])
 if os.path.isfile("t_losses.pt"):
-    t_losses = T.load("t_losses.pt").to(dtype=T.float32, device="cpu")
+    t_losses = T.load("stats/t_losses.pt").to(dtype=T.float32, device="cpu")
 if os.path.isfile("v_losses.pt"):
-    v_losses = T.load("v_losses.pt").to(dtype=T.float32, device="cpu")
+    v_losses = T.load("stats/v_losses.pt").to(dtype=T.float32, device="cpu")
 
 for i, t_x in enumerate(t_loader):
     T.cuda.empty_cache()
@@ -89,7 +87,6 @@ for i, t_x in enumerate(t_loader):
     vitmae.train()
     rand_idx = random.randint(0, len(t_set) - t_batch_size)
     t_x = t_x[0].to(dtype=dtype, device=device)
-    # t_x = t_set[rand_idx : rand_idx + t_batch_size].to(dtype=dtype, device=device)
 
     y_hat = vitmae(t_x, mask=True)
     y_hat = vitmae.conv_t(y_hat)
@@ -113,9 +110,6 @@ for i, t_x in enumerate(t_loader):
     # validation
     vitmae.eval()
 
-    # v_rand_idx = random.randint(0, len(v_set) - v_batch_size)
-    # v_x = t_set[v_rand_idx : v_rand_idx + v_batch_size].to(dtype=dtype, device=device)
-
     v_x = next(iter(v_loader))[0].to(dtype=dtype, device=device)
 
     v_hat = vitmae(v_x, mask=True)
@@ -135,10 +129,10 @@ for i, t_x in enumerate(t_loader):
 
     if i % save_interval == 0:
         vitmae.save()
-        T.save(t_losses, "t_losses.pt")
-        T.save(v_losses, "v_losses.pt")
+        T.save(t_losses, "stats/t_losses.pt")
+        T.save(v_losses, "stats/v_losses.pt")
 
-print("Done!!!")
 vitmae.save()
-T.save(t_losses, "t_losses.pt")
-T.save(v_losses, "v_losses.pt")
+T.save(t_losses, "stats/t_losses.pt")
+T.save(v_losses, "stats/v_losses.pt")
+print("Done!!!")
