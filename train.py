@@ -61,10 +61,10 @@ v_set = tv.datasets.CelebA(
 # ]
 print("Dataset loaded")
 
-print("Started transforms")
-t_data, v_data = list(map(proc, t_data)), list(map(proc, v_data))
-t_data, v_data = T.stack(t_data), T.stack(v_data)
-print("Transforms completed", t_data.shape, v_data.shape)
+# print("Started transforms")
+# t_data, v_data = list(map(proc, t_data)), list(map(proc, v_data))
+# t_data, v_data = T.stack(t_data), T.stack(v_data)
+# print("Transforms completed", t_data.shape, v_data.shape)
 
 params = vitmae.parameters()
 
