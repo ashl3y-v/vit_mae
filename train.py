@@ -19,11 +19,11 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 2e-2
+lr = 3e-3
 clip = 16
-epochs = 131072
+# not currently used
+epochs = 1
 save_interval = 128
-batches = epochs
 t_batch_size = 62
 v_batch_size = 16
 
@@ -33,8 +33,6 @@ vitmae = ViTMAE(dtype=dtype, device=device)
 if os.path.isfile(vitmae.file):
     print("Loading model", vitmae.file)
     vitmae.load()
-
-print("Loading dataset: " + str(batches * t_batch_size) + " images")
 
 proc = transforms.Compose(
     [
