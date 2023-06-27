@@ -36,28 +36,30 @@ if os.path.isfile(vitmae.file):
 
 # use coco
 print("Loading dataset: " + str(batches * batch_size) + " images")
-t_data = tv.datasets.CocoDetection("./data/")
 
-t_data = load_dataset("Multimodal-Fatima/StanfordCars_train", split="train")["image"][
-    : batches * batch_size
-]
-v_data = load_dataset("Multimodal-Fatima/StanfordCars_test", split="test")["image"][
-    0:batches
-]
-print("Dataset loaded")
 proc_0 = transforms.Compose(
     [
+        transforms.Resize([256, 256], antialias=True),
         transforms.Lambda(lambda x: x if x.mode == "RGB" else x.convert("RGB")),
         transforms.ToTensor(),
+        transforms.ConvertImageDtype(T.uint8),
     ]
 )
-proc_1 = T.jit.script(
-    nn.Sequential(
-        transforms.ConvertImageDtype(T.uint8),
-        transforms.Resize([256, 256], antialias=True),
-    )
+
+t_set = tv.datasets.CelebA(
+    "./data/", split="train", target_type=None, transform=proc_0, download=True
 )
-proc = lambda x: proc_1(proc_0(x))
+v_set = tv.datasets.CelebA(
+    "./data/", split="valid", target_type=None, transform=proc_0, download=True
+)
+
+# t_set = load_dataset("Multimodal-Fatima/StanfordCars_train", split="train")["image"][
+#     : batches * batch_size
+# ]
+# v_set = load_dataset("Multimodal-Fatima/StanfordCars_test", split="test")["image"][
+#     0:batches
+# ]
+print("Dataset loaded")
 
 print("Started transforms")
 t_data, v_data = list(map(proc, t_data)), list(map(proc, v_data))
