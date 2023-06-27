@@ -21,7 +21,7 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 lr = 2e-2
 clip = 16
-epochs = 32768
+epochs = 131072
 save_interval = 128
 batches = epochs
 t_batch_size = 62
