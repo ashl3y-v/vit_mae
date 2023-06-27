@@ -19,12 +19,12 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 2e-2
+lr = 1e-2
 clip = 16
-epochs = 2048
+epochs = 4096
 save_interval = 64
 batches = epochs
-batch_size = 62
+t_batch_size = 62
 v_batch_size = 16
 
 T.cuda.empty_cache()
@@ -34,10 +34,9 @@ if os.path.isfile(vitmae.file):
     print("Loading model", vitmae.file)
     vitmae.load()
 
-# use coco
-print("Loading dataset: " + str(batches * batch_size) + " images")
+print("Loading dataset: " + str(batches * t_batch_size) + " images")
 
-proc_0 = transforms.Compose(
+proc = transforms.Compose(
     [
         transforms.Resize([256, 256], antialias=True),
         transforms.Lambda(lambda x: x if x.mode == "RGB" else x.convert("RGB")),
@@ -46,25 +45,29 @@ proc_0 = transforms.Compose(
     ]
 )
 
-t_set = tv.datasets.CelebA(
-    "./data/", split="train", target_type=None, transform=proc_0, download=True
-)
-v_set = tv.datasets.CelebA(
-    "./data/", split="valid", target_type=None, transform=proc_0, download=True
+t_set = tv.datasets.CelebA("./data/", split="train", transform=proc, download=True)
+v_set = tv.datasets.CelebA("./data/", split="valid", transform=proc, download=True)
+
+t_loader = T.utils.data.DataLoader(
+    t_set,
+    batch_size=t_batch_size,
+    shuffle=True,
+    num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
 )
 
-# t_set = load_dataset("Multimodal-Fatima/StanfordCars_train", split="train")["image"][
-#     : batches * batch_size
-# ]
-# v_set = load_dataset("Multimodal-Fatima/StanfordCars_test", split="test")["image"][
-#     0:batches
-# ]
+v_loader = T.utils.data.DataLoader(
+    v_set,
+    batch_size=v_batch_size,
+    shuffle=True,
+    num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+)
+
 print("Dataset loaded")
 
 # print("Started transforms")
-# t_data, v_data = list(map(proc, t_data)), list(map(proc, v_data))
-# t_data, v_data = T.stack(t_data), T.stack(v_data)
-# print("Transforms completed", t_data.shape, v_data.shape)
+# t_set, v_set = list(map(proc, t_set)), list(map(proc, v_set))
+# t_set, v_set = T.stack(t_set), T.stack(v_set)
+# print("Transforms completed", t_set.shape, v_set.shape)
 
 params = vitmae.parameters()
 
@@ -79,20 +82,21 @@ if os.path.isfile("t_losses.pt"):
 if os.path.isfile("v_losses.pt"):
     v_losses = T.load("v_losses.pt").to(dtype=T.float32, device="cpu")
 
-for i in range(epochs):
+for i, t_x in enumerate(t_loader):
     T.cuda.empty_cache()
 
     # training
     vitmae.train()
-    rand_idx = random.randint(0, len(t_data) - batch_size)
-    x = t_data[rand_idx : rand_idx + batch_size].to(dtype=dtype, device=device)
+    rand_idx = random.randint(0, len(t_set) - t_batch_size)
+    t_x = t_x[0].to(dtype=dtype, device=device)
+    # t_x = t_set[rand_idx : rand_idx + t_batch_size].to(dtype=dtype, device=device)
 
-    y_hat = vitmae(x, mask=True)
+    y_hat = vitmae(t_x, mask=True)
     y_hat = vitmae.conv_t(y_hat)
 
     optim.zero_grad(set_to_none=True)
 
-    loss = vitmae.loss(x, y_hat)
+    loss = vitmae.loss(t_x, y_hat)
     loss.backward()
     T.nn.utils.clip_grad_norm_(params, clip)
     optim.step()
@@ -103,13 +107,16 @@ for i in range(epochs):
     )
 
     # delete tensors to free memory
-    del x, y_hat, loss
+    del t_x, y_hat, loss
     T.cuda.empty_cache()
 
     # validation
     vitmae.eval()
-    v_rand_idx = random.randint(0, len(v_data) - v_batch_size)
-    v_x = t_data[v_rand_idx : v_rand_idx + v_batch_size].to(dtype=dtype, device=device)
+
+    # v_rand_idx = random.randint(0, len(v_set) - v_batch_size)
+    # v_x = t_set[v_rand_idx : v_rand_idx + v_batch_size].to(dtype=dtype, device=device)
+
+    v_x = next(iter(v_loader))[0].to(dtype=dtype, device=device)
 
     v_hat = vitmae(v_x, mask=True)
     v_hat = vitmae.conv_t(v_hat)
@@ -124,7 +131,7 @@ for i in range(epochs):
     del v_x, v_hat, v_loss
     T.cuda.empty_cache()
 
-    print("Epoch loss", i, t_losses[-1], v_losses[-1])
+    # print("Epoch loss", i, t_losses[-1], v_losses[-1])
 
     if i % save_interval == 0:
         vitmae.save()
