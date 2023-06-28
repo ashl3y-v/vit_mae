@@ -8,6 +8,7 @@ import os
 import random
 import torch as T
 import torchvision as tv
+import math
 
 T.manual_seed(0)
 
@@ -21,8 +22,7 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 lr = 3e-3
 clip = 16
-# not currently used
-epochs = 1
+epochs = 4096
 save_interval = 128
 t_batch_size = 62
 v_batch_size = 16
@@ -43,21 +43,25 @@ proc = transforms.Compose(
     ]
 )
 
-t_set = tv.datasets.CelebA("./data/", split="train", transform=proc, download=True)
-v_set = tv.datasets.CelebA("./data/", split="valid", transform=proc, download=True)
+t_set = tv.datasets.ImageNet("./data/", split="train", transform=proc)
+v_set = tv.datasets.ImageNet("./data/", split="val", transform=proc)
 
-t_loader = T.utils.data.DataLoader(
-    t_set,
-    batch_size=t_batch_size,
-    shuffle=True,
-    num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+t_loader = iter(
+    T.utils.data.DataLoader(
+        t_set,
+        batch_size=t_batch_size,
+        shuffle=True,
+        num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+    )
 )
 
-v_loader = T.utils.data.DataLoader(
-    v_set,
-    batch_size=v_batch_size,
-    shuffle=True,
-    num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+v_loader = iter(
+    T.utils.data.DataLoader(
+        v_set,
+        batch_size=v_batch_size,
+        shuffle=True,
+        num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+    )
 )
 
 print("Dataset loaded")
@@ -66,7 +70,16 @@ params = vitmae.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-lr_sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, total_steps=epochs)
+u = 512
+u_e = 4 * u
+lr_sch = T.optim.lr_scheduler.SequentialLR(
+    optim,
+    schedulers=[
+        T.optim.lr_scheduler.CosineAnnealingWarmRestarts(optim, u),
+        T.optim.lr_scheduler.LinearLR(optim, 0.125, 0, total_iters=u_e),
+    ],
+    milestones=[epochs - u_e],
+)
 
 t_losses = T.tensor([])
 v_losses = T.tensor([])
@@ -75,12 +88,14 @@ if os.path.isfile("t_losses.pt"):
 if os.path.isfile("v_losses.pt"):
     v_losses = T.load("stats/v_losses.pt").to(dtype=T.float32, device="cpu")
 
-for i, t_x in enumerate(t_loader):
+for i in range(epochs):
     T.cuda.empty_cache()
 
     # training
     vitmae.train()
-    rand_idx = random.randint(0, len(t_set) - t_batch_size)
+
+    t_x = next(t_loader)[0].to(dtype=dtype, device=device)
+
     t_x = t_x[0].to(dtype=dtype, device=device)
 
     y_hat = vitmae(t_x, mask=True)
@@ -105,7 +120,7 @@ for i, t_x in enumerate(t_loader):
     # validation
     vitmae.eval()
 
-    v_x = next(iter(v_loader))[0].to(dtype=dtype, device=device)
+    v_x = next(v_loader)[0].to(dtype=dtype, device=device)
 
     v_hat = vitmae(v_x, mask=True)
     v_hat = vitmae.conv_t(v_hat)

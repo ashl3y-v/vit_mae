@@ -2,22 +2,27 @@ import torch as T
 from torch import nn
 import matplotlib.pyplot as plt
 
-EPOCHS = 1000
-BATCHES = 10
+EPOCHS = 4096
 steps = []
 lrs = []
 model = [nn.Parameter()]
 optim = T.optim.AdamW(model, lr=1)
 
-sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=1, total_steps=EPOCHS * BATCHES)
+u = 512
+u_e = 4 * u
+sch = T.optim.lr_scheduler.SequentialLR(
+    optim,
+    schedulers=[
+        T.optim.lr_scheduler.CosineAnnealingWarmRestarts(optim, u),
+        T.optim.lr_scheduler.LinearLR(optim, 0.125, 0, total_iters=u_e),
+    ],
+    milestones=[EPOCHS - u_e],
+)
 
 for epoch in range(EPOCHS):
-    for batch in range(BATCHES):
-        lrs.append(sch.get_last_lr()[0])
-        steps.append(epoch * BATCHES + batch)
-        sch.step()
+    lrs.append(sch.get_last_lr()[0])
+    steps.append(epoch)
+    sch.step()
 
-plt.figure()
-plt.legend()
-plt.plot(steps, lrs, label="OneCycle")
+plt.plot(steps, lrs)
 plt.show()
