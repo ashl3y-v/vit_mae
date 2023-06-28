@@ -46,12 +46,11 @@ proc = transforms.Compose(
 dataset = tv.datasets.INaturalist(
     "./data/",
     version="2021_train_mini",
-    target_type="Insecta",
+    target_type="class",
     transform=proc,
-    download=True,
+    # download=True,
 )
 t_set, v_set = T.utils.data.random_split(dataset, [0.8, 0.2])
-print(t_set, v_set)
 
 t_loader = iter(
     T.utils.data.DataLoader(
@@ -102,8 +101,6 @@ for i in range(epochs):
     vitmae.train()
 
     t_x = next(t_loader)[0].to(dtype=dtype, device=device)
-
-    t_x = t_x[0].to(dtype=dtype, device=device)
 
     y_hat = vitmae(t_x, mask=True)
     y_hat = vitmae.conv_t(y_hat)
