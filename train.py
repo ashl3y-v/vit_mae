@@ -21,7 +21,7 @@ dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
 lr = 3e-3
-clip = 16
+clip = 24
 epochs = 4096
 save_interval = 128
 t_batch_size = 62
