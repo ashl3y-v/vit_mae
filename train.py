@@ -43,8 +43,15 @@ proc = transforms.Compose(
     ]
 )
 
-t_set = tv.datasets.ImageNet("./data/", split="train", transform=proc)
-v_set = tv.datasets.ImageNet("./data/", split="val", transform=proc)
+dataset = tv.datasets.INaturalist(
+    "./data/",
+    version="2021_train_mini",
+    target_type="Insecta",
+    transform=proc,
+    download=True,
+)
+t_set, v_set = T.utils.data.random_split(dataset, [0.8, 0.2])
+print(t_set, v_set)
 
 t_loader = iter(
     T.utils.data.DataLoader(
