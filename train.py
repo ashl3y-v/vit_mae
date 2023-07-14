@@ -1,16 +1,15 @@
-from datasets import load_dataset
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.nn import functional as F
 from torchvision import transforms
-from vitmae import ViTMAE
+from vit import ViT
+import multiprocessing
 import os
-import random
 import torch as T
 import torchvision as tv
-import math
 
 T.manual_seed(0)
+# T.seed()
 
 T.backends.cudnn.benchmark = True
 T.autograd.set_detect_anomaly(True)
@@ -22,24 +21,25 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 lr = 3e-3
 clip = 24
-epochs = 4096
-save_interval = 128
-t_batch_size = 62
-v_batch_size = 16
+epochs = 16384
+save_interval = epochs // 32
+info_interval = epochs // 64
+t_batch_size = 96
+v_batch_size = 32
 
 T.cuda.empty_cache()
 
-vitmae = ViTMAE(dtype=dtype, device=device)
-if os.path.isfile(vitmae.file):
-    print("Loading model", vitmae.file)
-    vitmae.load()
+vit = ViT(dtype=dtype, device=device)
+if os.path.isfile(vit.file):
+    print("Loading model", vit.file)
+    vit.load()
 
 proc = transforms.Compose(
     [
-        transforms.Resize([256, 256], antialias=True),
+        transforms.Resize([512, 512], antialias=True),
         transforms.Lambda(lambda x: x if x.mode == "RGB" else x.convert("RGB")),
         transforms.ToTensor(),
-        transforms.ConvertImageDtype(T.uint8),
+        transforms.ConvertImageDtype(T.bfloat16),
     ]
 )
 
@@ -50,6 +50,7 @@ dataset = tv.datasets.INaturalist(
     transform=proc,
     # download=True,
 )
+
 t_set, v_set = T.utils.data.random_split(dataset, [0.8, 0.2])
 
 t_loader = iter(
@@ -57,7 +58,7 @@ t_loader = iter(
         t_set,
         batch_size=t_batch_size,
         shuffle=True,
-        num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+        num_workers=multiprocessing.cpu_count(),
     )
 )
 
@@ -66,25 +67,33 @@ v_loader = iter(
         v_set,
         batch_size=v_batch_size,
         shuffle=True,
-        num_workers=int(os.system("cat /proc/cpuinfo | grep processor | wc -l")),
+        num_workers=multiprocessing.cpu_count(),
     )
 )
 
 print("Dataset loaded")
 
-params = vitmae.parameters()
+params = vit.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-u = 512
-u_e = 4 * u
+u = epochs // 32
 lr_sch = T.optim.lr_scheduler.SequentialLR(
     optim,
     schedulers=[
         T.optim.lr_scheduler.CosineAnnealingWarmRestarts(optim, u),
-        T.optim.lr_scheduler.LinearLR(optim, 0.125, 0, total_iters=u_e),
+        T.optim.lr_scheduler.CyclicLR(
+            optim,
+            base_lr=0,
+            max_lr=1,
+            step_size_up=u // 2,
+            step_size_down=u // 2,
+            gamma=1 - (10 / epochs),
+            mode="exp_range",
+            cycle_momentum=False,
+        ),
     ],
-    milestones=[epochs - u_e],
+    milestones=[epochs // 2],
 )
 
 t_losses = T.tensor([])
@@ -98,16 +107,16 @@ for i in range(epochs):
     T.cuda.empty_cache()
 
     # training
-    vitmae.train()
+    vit.train()
 
     t_x = next(t_loader)[0].to(dtype=dtype, device=device)
 
-    y_hat = vitmae(t_x, mask=True)
-    y_hat = vitmae.conv_t(y_hat)
+    t_x_m, _ = vit.mask(t_x, mask=True)
+    t_x_hat, _ = vit(t_x_m)
 
     optim.zero_grad(set_to_none=True)
 
-    loss = vitmae.loss(t_x, y_hat)
+    loss = vit.loss(t_x, t_x_hat)
     loss.backward()
     T.nn.utils.clip_grad_norm_(params, clip)
     optim.step()
@@ -118,35 +127,38 @@ for i in range(epochs):
     )
 
     # delete tensors to free memory
-    del t_x, y_hat, loss
+    del t_x, t_x_m, t_x_hat, loss
     T.cuda.empty_cache()
 
     # validation
-    vitmae.eval()
+    vit.eval()
 
     v_x = next(v_loader)[0].to(dtype=dtype, device=device)
 
-    v_hat = vitmae(v_x, mask=True)
-    v_hat = vitmae.conv_t(v_hat)
+    v_x_m, _ = vit.mask(v_x, mask=True)
+    v_x_hat, _ = vit(v_x_m)
 
-    v_loss = vitmae.loss(v_x, v_hat)
+    v_loss = vit.loss(v_x, v_x_hat)
 
     v_losses = T.cat(
         [v_losses, v_loss.detach().to(dtype=T.float32, device="cpu").reshape([1])]
     )
 
     # delete tensors to free memory
-    del v_x, v_hat, v_loss
+    del v_x, v_x_m, v_x_hat, v_loss
     T.cuda.empty_cache()
 
-    # print("Epoch loss", i, t_losses[-1], v_losses[-1])
-
     if i % save_interval == 0:
-        vitmae.save()
+        vit.save()
         T.save(t_losses, "stats/t_losses.pt")
         T.save(v_losses, "stats/v_losses.pt")
 
-vitmae.save()
+    if i % info_interval == 0:
+        print(
+            f"epoch: {i}, average loss from last epoch: {v_losses[-save_interval:-1].mean()}"
+        )
+
+vit.save()
 T.save(t_losses, "stats/t_losses.pt")
 T.save(v_losses, "stats/v_losses.pt")
-print("Done!!!")
+print("Training complete")

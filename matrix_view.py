@@ -1,20 +1,19 @@
 import sys
 import torch as T
 from matplotlib import pyplot as plt
+from torchvision import transforms
+import torchvision as tv
 
 mat = T.load(sys.argv[1]).detach().to(dtype=T.float32, device="cpu")
 
-mat = (
-    mat[0]
-    .permute(2, 1, 0)
-    .reshape(
-        [
-            3,
-        ]
-    )
-)
+if mat.dim() > 3:
+    mat = mat[0]
 
-print(mat.max())
+d = list(mat.shape)
+c = min(d)
+d.remove(c)
+
+mat = mat.reshape([*d, c])
 
 plt.matshow(mat)
 plt.show()
