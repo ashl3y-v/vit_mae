@@ -19,13 +19,13 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 3e-3
+lr = 3e-4
 clip = 24
-epochs = 16384
-save_interval = epochs // 32
+epochs = 8192
+save_interval = 1  # epochs // 32
 info_interval = epochs // 64
-t_batch_size = 96
-v_batch_size = 32
+t_batch_size = 64
+v_batch_size = 16
 
 T.cuda.empty_cache()
 
@@ -85,7 +85,7 @@ lr_sch = T.optim.lr_scheduler.SequentialLR(
         T.optim.lr_scheduler.CyclicLR(
             optim,
             base_lr=0,
-            max_lr=1,
+            max_lr=lr,
             step_size_up=u // 2,
             step_size_down=u // 2,
             gamma=1 - (10 / epochs),
@@ -111,8 +111,7 @@ for i in range(epochs):
 
     t_x = next(t_loader)[0].to(dtype=dtype, device=device)
 
-    t_x_m, _ = vit.mask(t_x, mask=True)
-    t_x_hat, _ = vit(t_x_m)
+    t_x_hat, _ = vit(t_x, mask=True)
 
     optim.zero_grad(set_to_none=True)
 
@@ -127,7 +126,7 @@ for i in range(epochs):
     )
 
     # delete tensors to free memory
-    del t_x, t_x_m, t_x_hat, loss
+    del t_x, t_x_hat, loss
     T.cuda.empty_cache()
 
     # validation
@@ -135,8 +134,7 @@ for i in range(epochs):
 
     v_x = next(v_loader)[0].to(dtype=dtype, device=device)
 
-    v_x_m, _ = vit.mask(v_x, mask=True)
-    v_x_hat, _ = vit(v_x_m)
+    v_x_hat, _ = vit(v_x, mask=True)
 
     v_loss = vit.loss(v_x, v_x_hat)
 
@@ -145,7 +143,7 @@ for i in range(epochs):
     )
 
     # delete tensors to free memory
-    del v_x, v_x_m, v_x_hat, v_loss
+    del v_x, v_x_hat, v_loss
     T.cuda.empty_cache()
 
     if i % save_interval == 0:

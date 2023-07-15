@@ -4,7 +4,6 @@ import math
 import time
 import torch as T
 import torch.nn.functional as F
-import random
 
 
 class PositionalEncoding(nn.Module):
@@ -34,7 +33,7 @@ class ViT(nn.Module):
         w=512,
         h=512,
         channels=3,
-        n_layer=64,
+        n_layer=32,
         n_head=4,
         patch_size=16,
         d_model=256,
@@ -152,8 +151,6 @@ class ViT(nn.Module):
             .flatten(2, 3)
         )
 
-        T.save(im_mask, "stats/" + str(random.randint(0, 100)) + ".pt")
-
         return x * im_mask.to(x.dtype), mask
 
     # def reverse_batchnorm(self, x):
@@ -175,8 +172,8 @@ if __name__ == "__main__":
     vit = ViT(dtype=dtype, device=device)
     a = T.rand([3, 3, 512, 512], dtype=dtype, device=device)
 
-    vit(a, mask=True)
-    # print(summary(vit, a, show_input=True, show_hierarchical=True))
+    # vit(a, mask=True)
+    print(summary(vit, a, show_input=True, show_hierarchical=True))
     # b = vit.bn(a)
     # c = vit.reverse_batchnorm(b)
 
