@@ -7,9 +7,8 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 T.manual_seed(0)
 
-a = T.randn([2, 2, 2])
+x = T.randn([100, 100, 100])
 
-print(a.dtype, a.device)
-a.to(dtype=T.bfloat16, device="cuda")
+a = T.randn(x.size(), dtype=x.dtype, device=x.device)
 
-print(a.dtype, a.device)
+print(a.mean(), a.std())

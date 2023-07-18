@@ -11,8 +11,8 @@ import transformers
 from torchvision import transforms
 import torchvision as tv
 
-# T.manual_seed(1)
-T.seed()
+T.manual_seed(0)
+# T.seed()
 
 T.backends.cudnn.benchmark = True
 T.autograd.set_detect_anomaly(True)
@@ -24,7 +24,7 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 T.cuda.empty_cache()
 
-vit = ViT(dtype=dtype, device=device)
+vit = T.compile(ViT(dtype=dtype, device=device), mode="max-autotune")
 vit.eval()
 if os.path.isfile(vit.file):
     print("Loading model", vit.file)
@@ -32,12 +32,15 @@ if os.path.isfile(vit.file):
 
 proc = transforms.Compose(
     [
-        transforms.Resize([512, 512], antialias=True),
+        transforms.Resize([256, 256], antialias=True),
         transforms.Lambda(lambda x: x if x.mode == "RGB" else x.convert("RGB")),
         transforms.ToTensor(),
         transforms.ConvertImageDtype(T.bfloat16),
+        transforms.Normalize(0, 1),
     ]
 )
+
+noise = transforms.Lambda(lambda x: x + T.randn(x.size(), dtype=x.dtype, device=x.device)/4)
 
 dataset = tv.datasets.INaturalist(
     "./data/",
@@ -49,15 +52,9 @@ dataset = tv.datasets.INaturalist(
 
 im = dataset[1][0].to(dtype=dtype, device=device)
 
-im_m, _ = vit.mask(im.unsqueeze(0), mask=True)
-im_r, _ = vit(im_m)
-
-im_m = im_m.squeeze(0)
-im_r = im_r.squeeze(0)
-
 # print(im_ex.dtype, im_re.dtype)
 # print(im_ex.mean(), im_ex.std(), im_re.mean(), im_re.std())
 
-plt.matshow(im_m.permute([1, 2, 0]).to(dtype=T.float32, device="cpu"))
-plt.matshow(im_r.permute([1, 2, 0]).to(dtype=T.float32, device="cpu").detach())
+plt.matshow(im.permute([1, 2, 0]).to(dtype=T.float32, device="cpu"))
+# plt.matshow(im_r.permute([1, 2, 0]).to(dtype=T.float32, device="cpu").detach())
 plt.show()

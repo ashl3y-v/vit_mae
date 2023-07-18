@@ -19,29 +19,31 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 3e-4
+lr = 3e-3
 clip = 24
-epochs = 8192
-save_interval = 1  # epochs // 32
+epochs = 16384
+save_interval = epochs // 32
 info_interval = epochs // 64
 t_batch_size = 64
 v_batch_size = 16
 
 T.cuda.empty_cache()
 
-vit = ViT(dtype=dtype, device=device)
+vit = T.compile(ViT(dtype=dtype, device=device), mode="max-autotune")
 if os.path.isfile(vit.file):
     print("Loading model", vit.file)
     vit.load()
 
 proc = transforms.Compose(
     [
-        transforms.Resize([512, 512], antialias=True),
+        transforms.Resize([256, 256], antialias=True),
         transforms.Lambda(lambda x: x if x.mode == "RGB" else x.convert("RGB")),
         transforms.ToTensor(),
         transforms.ConvertImageDtype(T.bfloat16),
+        transforms.Normalize(0, 1),
     ]
 )
+
 
 dataset = tv.datasets.INaturalist(
     "./data/",
@@ -111,7 +113,7 @@ for i in range(epochs):
 
     t_x = next(t_loader)[0].to(dtype=dtype, device=device)
 
-    t_x_hat, _ = vit(t_x, mask=True)
+    t_x_hat = vit(t_x, noise=True)
 
     optim.zero_grad(set_to_none=True)
 
@@ -134,7 +136,7 @@ for i in range(epochs):
 
     v_x = next(v_loader)[0].to(dtype=dtype, device=device)
 
-    v_x_hat, _ = vit(v_x, mask=True)
+    v_x_hat = vit(v_x, noise=True)
 
     v_loss = vit.loss(v_x, v_x_hat)
 
@@ -159,4 +161,5 @@ for i in range(epochs):
 vit.save()
 T.save(t_losses, "stats/t_losses.pt")
 T.save(v_losses, "stats/v_losses.pt")
+
 print("Training complete")
