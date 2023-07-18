@@ -29,7 +29,7 @@ v_batch_size = 16
 
 T.cuda.empty_cache()
 
-vit = T.compile(ViT(dtype=dtype, device=device), mode="max-autotune")
+vit = T.compile(ViT(dtype=dtype, device=device))
 if os.path.isfile(vit.file):
     print("Loading model", vit.file)
     vit.load()
