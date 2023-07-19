@@ -79,24 +79,7 @@ params = vit.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-u = epochs // 32
-lr_sch = T.optim.lr_scheduler.SequentialLR(
-    optim,
-    schedulers=[
-        T.optim.lr_scheduler.CosineAnnealingWarmRestarts(optim, u),
-        T.optim.lr_scheduler.CyclicLR(
-            optim,
-            base_lr=0,
-            max_lr=lr,
-            step_size_up=u // 2,
-            step_size_down=u // 2,
-            gamma=1 - (10 / epochs),
-            mode="exp_range",
-            cycle_momentum=False,
-        ),
-    ],
-    milestones=[epochs // 2],
-)
+lr_sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, epochs=epochs, steps_per_epoch=1)
 
 t_losses = T.tensor([])
 v_losses = T.tensor([])
