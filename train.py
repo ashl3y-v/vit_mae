@@ -19,9 +19,9 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 3e-3
+lr = 3e-4
 clip = 24
-epochs = 16384
+epochs = 8192
 save_interval = epochs // 32
 info_interval = epochs // 64
 t_batch_size = 64
@@ -60,7 +60,7 @@ t_loader = iter(
         t_set,
         batch_size=t_batch_size,
         shuffle=True,
-        num_workers=multiprocessing.cpu_count(),
+        num_workers=multiprocessing.cpu_count() // 2,
     )
 )
 
@@ -69,7 +69,7 @@ v_loader = iter(
         v_set,
         batch_size=v_batch_size,
         shuffle=True,
-        num_workers=multiprocessing.cpu_count(),
+        num_workers=multiprocessing.cpu_count() // 2,
     )
 )
 

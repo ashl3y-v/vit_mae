@@ -24,7 +24,7 @@ device = "cuda" if T.cuda.is_available() else "cpu"
 
 T.cuda.empty_cache()
 
-vit = T.compile(ViT(dtype=dtype, device=device), mode="max-autotune")
+vit = ViT(dtype=dtype, device=device)
 vit.eval()
 if os.path.isfile(vit.file):
     print("Loading model", vit.file)
@@ -40,8 +40,6 @@ proc = transforms.Compose(
     ]
 )
 
-noise = transforms.Lambda(lambda x: x + T.randn(x.size(), dtype=x.dtype, device=x.device)/4)
-
 dataset = tv.datasets.INaturalist(
     "./data/",
     version="2021_train_mini",
@@ -52,9 +50,11 @@ dataset = tv.datasets.INaturalist(
 
 im = dataset[1][0].to(dtype=dtype, device=device)
 
+im_r = vit(im.unsqueeze(0), noise=True).squeeze(0)
+
 # print(im_ex.dtype, im_re.dtype)
 # print(im_ex.mean(), im_ex.std(), im_re.mean(), im_re.std())
 
 plt.matshow(im.permute([1, 2, 0]).to(dtype=T.float32, device="cpu"))
-# plt.matshow(im_r.permute([1, 2, 0]).to(dtype=T.float32, device="cpu").detach())
+plt.matshow(im_r.permute([1, 2, 0]).detach().to(dtype=T.float32, device="cpu"))
 plt.show()

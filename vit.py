@@ -23,6 +23,7 @@ class PositionalEncoding(nn.Module):
         Arguments:
             x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
         """
+        print(self.pe.shape)
         x = x + self.pe[: x.size(0)]
         return self.dropout(x)
 
@@ -32,11 +33,10 @@ class ViT(nn.Module):
         self,
         w=256,
         h=256,
-        channels=3,
-        n_layer=32,
+        c=3,
+        n_layer=16,
         n_head=8,
         patch_size=16,
-        d_model=128,
         d_feedforward=2048,
         noise=0.25,
         dropout=0.1,
@@ -49,9 +49,11 @@ class ViT(nn.Module):
         self.dtype = dtype
         self.device = device
 
+        d_model = patch_size**2 * c
+
         self.w = w
         self.h = h
-        self.channels = channels
+        self.c = c
         self.n_layer = n_layer
         self.n_head = n_head
         self.patch_size = patch_size
@@ -64,20 +66,8 @@ class ViT(nn.Module):
 
         self.pos = PositionalEncoding(d_model, max_len=max_len)
 
-        self.noise = transforms.Lambda(lambda x: x + T.randn(x.size(), dtype=x.dtype, device=x.device) * noise)
-
-        self.conv = nn.Conv2d(
-            channels,
-            d_model,
-            kernel_size=patch_size,
-            stride=patch_size,
-        )
-
-        self.t_conv = nn.ConvTranspose2d(
-            d_model,
-            channels,
-            kernel_size=patch_size,
-            stride=patch_size,
+        self.noise = transforms.Lambda(
+            lambda x: x + T.randn(x.size(), dtype=x.dtype, device=x.device) * noise
         )
 
         layer = nn.TransformerEncoderLayer(
@@ -96,22 +86,35 @@ class ViT(nn.Module):
 
         self.to(dtype=dtype, device=device)
 
-    @T.compile
     def forward(self, x: T.Tensor, noise=False):
+        # [b, c, w, h] -> [b, c, w, h]
         if noise:
             x = self.noise(x)
 
-        # [b, c, w, h] -> [b, e, x, y]
-        x = self.conv(x)
+        # [b, c, w, h] -> [b, l, e]
+        x = (
+            x.unsqueeze(1)
+            .unsqueeze(3)
+            .reshape(
+                [
+                    x.size(0),
+                    self.c,
+                    self.w_p,
+                    self.patch_size,
+                    self.h_p,
+                    self.patch_size,
+                ]
+            )
+            .permute([0, 2, 4, 3, 5, 1])
+            .flatten(3)
+            .flatten(1, 2)
+        )
 
-        # [b, e, w, h] -> [b, e, l]
-        x = x.flatten(2)
-
-        # [b, e, l] -> [l, b, e]
-        x = x.permute(2, 0, 1)
+        # [b, l, e] -> [l, b, e]
+        x = x.permute([1, 0, 2])
 
         # [l, b, e] -> [l, b, e]
-        x = x + self.pos(x)
+        x = self.pos(x)
 
         # [l, b, e] -> [b, l, e]
         x = x.permute([1, 0, 2])
@@ -119,11 +122,22 @@ class ViT(nn.Module):
         # [b, l, e] -> [b, l, e]
         x = self.encoder(x)
 
-        # [b, e, l] -> [b, e, x, y]
-        x = x.reshape([x.shape[0], -1, self.w_p, self.h_p])
-
-        # [b, e, x, y] -> [b, c, w, h]
-        x = self.t_conv(x)
+        # [b, l, e] -> [b, c, w, h]
+        x = (
+            x.reshape(
+                [
+                    x.size(0),
+                    self.w_p,
+                    self.h_p,
+                    self.patch_size,
+                    self.patch_size,
+                    self.c,
+                ]
+            )
+            .permute([0, 5, 1, 3, 2, 4])
+            .flatten(4, 5)
+            .flatten(2, 3)
+        )
 
         return x
 
