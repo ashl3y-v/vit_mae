@@ -16,7 +16,7 @@ class PositionalEncoding(nn.Module):
         pe = T.zeros(max_len, 1, d_model)
         pe[:, 0, 0::2] = T.sin(position * div_term)
         pe[:, 0, 1::2] = T.cos(position * div_term)
-        self.register_buffer("pe", pe)
+        self.pe = nn.Parameter(data=pe, requires_grad=True)
 
     def forward(self, x: T.Tensor) -> T.Tensor:
         """
@@ -34,13 +34,12 @@ class ViT(nn.Module):
         w=256,
         h=256,
         c=3,
-        n_layer=16,
-        n_head=8,
+        n_layer=32,
+        n_head=4,
         patch_size=16,
         d_feedforward=2048,
         noise=0.25,
         dropout=0.1,
-        max_len=256,
         file="vit.pt",
         dtype=T.bfloat16,
         device="cuda",
@@ -64,7 +63,7 @@ class ViT(nn.Module):
 
         self.file = file
 
-        self.pos = PositionalEncoding(d_model, max_len=max_len)
+        self.pos = PositionalEncoding(d_model, max_len=patch_size**2)
 
         self.noise = transforms.Lambda(
             lambda x: x + T.randn(x.size(), dtype=x.dtype, device=x.device) * noise
@@ -92,7 +91,27 @@ class ViT(nn.Module):
             x = self.noise(x)
 
         # [b, c, w, h] -> [b, l, e]
-        x = (
+        x = self.patch(x)
+
+        # [b, l, e] -> [l, b, e]
+        x = x.permute([1, 0, 2])
+
+        # [l, b, e] -> [l, b, e]
+        x = self.pos(x)
+
+        # [l, b, e] -> [b, l, e]
+        x = x.permute([1, 0, 2])
+
+        # [b, l, e] -> [b, l, e]
+        x = self.encoder(x)
+
+        # [b, l, e] -> [b, c, w, h]
+        x = self.unpatch(x)
+
+        return x
+
+    def patch(self, x: T.Tensor):
+        return (
             x.unsqueeze(1)
             .unsqueeze(3)
             .reshape(
@@ -110,20 +129,8 @@ class ViT(nn.Module):
             .flatten(1, 2)
         )
 
-        # [b, l, e] -> [l, b, e]
-        x = x.permute([1, 0, 2])
-
-        # [l, b, e] -> [l, b, e]
-        x = self.pos(x)
-
-        # [l, b, e] -> [b, l, e]
-        x = x.permute([1, 0, 2])
-
-        # [b, l, e] -> [b, l, e]
-        x = self.encoder(x)
-
-        # [b, l, e] -> [b, c, w, h]
-        x = (
+    def unpatch(self, x: T.Tensor):
+        return (
             x.reshape(
                 [
                     x.size(0),
@@ -138,8 +145,6 @@ class ViT(nn.Module):
             .flatten(4, 5)
             .flatten(2, 3)
         )
-
-        return x
 
     def save(self, file=None):
         T.save(self.state_dict(), file or self.file)

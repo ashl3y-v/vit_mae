@@ -12,7 +12,10 @@ from torchvision import transforms
 import torchvision as tv
 import sys
 
-remote = bool(sys.argv[1])
+if len(sys.argv) > 1:
+    remote = bool(sys.argv[1])
+else:
+    remote = False
 
 T.manual_seed(0)
 # T.seed()
