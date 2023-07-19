@@ -19,7 +19,7 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 1e-3
+lr = 3e-3
 clip = 16
 epochs = 8192
 save_interval = epochs // 32
@@ -79,7 +79,9 @@ params = vit.parameters()
 
 optim = T.optim.AdamW(params, lr=lr, fused=True)
 
-lr_sch = T.optim.lr_scheduler.OneCycleLR(optim, max_lr=lr, epochs=epochs, steps_per_epoch=1)
+lr_sch = T.optim.lr_scheduler.OneCycleLR(
+    optim, max_lr=lr, epochs=epochs, steps_per_epoch=1
+)
 
 t_losses = T.tensor([])
 v_losses = T.tensor([])
