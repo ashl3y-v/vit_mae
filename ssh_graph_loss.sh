@@ -1,4 +1,4 @@
-!#/bin/bash
+#!/bin/bash
 rmz stats/t_losses.pt
 rmz stats/v_losses.pt
 scp ash1:~/g/vit/stats/t_losses.pt ./stats/t_losses.pt

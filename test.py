@@ -10,6 +10,9 @@ from torch.nn import functional as F
 import transformers
 from torchvision import transforms
 import torchvision as tv
+import sys
+
+remote = bool(sys.argv[1])
 
 T.manual_seed(0)
 # T.seed()
@@ -55,6 +58,10 @@ im_r = vit(im.unsqueeze(0), noise=True).squeeze(0)
 # print(im_ex.dtype, im_re.dtype)
 # print(im_ex.mean(), im_ex.std(), im_re.mean(), im_re.std())
 
-plt.matshow(im.permute([1, 2, 0]).to(dtype=T.float32, device="cpu"))
-plt.matshow(im_r.permute([1, 2, 0]).detach().to(dtype=T.float32, device="cpu"))
-plt.show()
+if remote:
+    T.save(im, "stats/test.pt")
+    T.save(im_r, "stats/test_hat.pt")
+else:
+    plt.matshow(im.permute([1, 2, 0]).to(dtype=T.float32, device="cpu"))
+    plt.matshow(im_r.permute([1, 2, 0]).detach().to(dtype=T.float32, device="cpu"))
+    plt.show()
