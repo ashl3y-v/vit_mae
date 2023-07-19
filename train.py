@@ -24,8 +24,8 @@ clip = 24
 epochs = 8192
 save_interval = epochs // 32
 info_interval = epochs // 64
-t_batch_size = 64
-v_batch_size = 16
+t_batch_size = 96
+v_batch_size = 36
 
 T.cuda.empty_cache()
 
