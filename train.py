@@ -19,7 +19,7 @@ T.backends.cudnn.allow_tf32 = True
 dtype = T.bfloat16
 device = "cuda" if T.cuda.is_available() else "cpu"
 
-lr = 3e-3
+lr = 3e-4
 clip = 16
 epochs = 8192
 save_interval = epochs // 32

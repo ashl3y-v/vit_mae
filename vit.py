@@ -34,7 +34,7 @@ class ViT(nn.Module):
         w=256,
         h=256,
         c=3,
-        n_layer=32,
+        n_layer=12,
         n_head=4,
         patch_size=16,
         d_feedforward=2048,
